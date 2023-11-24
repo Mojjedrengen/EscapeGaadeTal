@@ -4,7 +4,7 @@
 #include <PubSubClient.h>
 #include <FastLED.h>
 
-#define Neopixel_PIN 21
+#define Neopixel_PIN 32
 #define NUM_LEDS     13
 
 CRGB leds[NUM_LEDS];
@@ -55,7 +55,16 @@ void reconnect_mqtt() {
 }
 
 
-int code = 2206; //Koden der skal intastes
+#define code 2206 //Koden der skal intastes
+
+#define highlightColor 0xa8b545
+#define letterColor WHITE
+#define backgroundColor BLACK
+#define winColor 0xa8b545
+
+const int letterPos[3] = {23, 100, 175};
+const int underline1[3] = {10, 80, 160};
+const int underline2[3] = {70, 150, 230};
 
 int input[3] = {0, 1, 2};
 int inputindex = 0;
@@ -93,7 +102,13 @@ void setup(){
   // Neopixel initialization
     FastLED.addLeds<WS2811, Neopixel_PIN, GRB>(leds, NUM_LEDS)
         .setCorrection(TypicalLEDStrip);
-    FastLED.setBrightness(10);
+    FastLED.setBrightness(64);
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Black;
+    }
+    FastLED.show();  // must be executed for neopixel becoming effectiv
+    M5.Lcd.fillScreen(backgroundColor);
 }
 
 /* After the program in setup() runs, it runs the program in loop()
@@ -102,6 +117,7 @@ After the program in the setup() function is executed, the program in the loop()
 The loop() function is an endless loop, in which the program will continue to run repeatedly */
 void loop() {
   M5.update();
+
   if (start == true){
     game_loop();
   }
@@ -113,36 +129,62 @@ void loop() {
   }
   pubSubClient.loop();
 
-  delay(150);
+  delay(250);
 }
 
 void game_loop(){
-  display();
-  M5.Lcd.setCursor(0, 0);
-  M5.Lcd.print(inputindex);
+  //display();
   if (digitalRead(36)) {
     changeNumberUp(inputindex);
+    display();
   } else if (digitalRead(0) == LOW){
     changeNumberDown(inputindex);
+    display();
   }
   if (digitalRead(26)) {
     if (inputindex < 2){
       inputindex++;
+      display();
     } else {
       inputindex = 0;
+      display();
       checkCode();
     }
   }
 }
 
 void display(){
-  M5.Lcd.drawChar(input[0]+65, 23, 25, 2);
-  M5.Lcd.drawChar(input[1]+65, 100, 25, 2);
-  M5.Lcd.drawChar(input[2]+65, 175, 25, 2);
+  M5.Lcd.fillScreen(backgroundColor);
+  int inputleft;
+  int inputright;
 
-  M5.Lcd.drawLine(10, 95, 70, 95, BLUE);
-  M5.Lcd.drawLine(80, 95, 150, 95, GREEN);
-  M5.Lcd.drawLine(160, 95, 230, 95, RED);
+  switch (inputindex) {
+    case 0:
+      inputleft = 2;
+      inputright = 1;
+      break;
+    case 1:
+      inputleft = 0;
+      inputright = 2;
+      break;
+    case 2:
+      inputleft = 1;
+      inputright = 0;
+      break;
+    default:
+      Serial.println("error: index array out of bounds!");
+      break;
+  }
+  M5.Lcd.setTextColor(highlightColor);
+  M5.Lcd.drawChar(input[inputindex]+65, letterPos[inputindex], 25, 2);
+
+  M5.Lcd.setTextColor(letterColor);
+  M5.Lcd.drawChar(input[inputleft]+65, letterPos[inputleft], 25, 2);
+  M5.Lcd.drawChar(input[inputright]+65, letterPos[inputright], 25, 2);
+
+  M5.Lcd.drawLine(underline1[inputindex], 95, underline2[inputindex], 95, highlightColor);
+  M5.Lcd.drawLine(underline1[inputleft], 95, underline2[inputleft], 95, letterColor);
+  M5.Lcd.drawLine(underline1[inputright], 95, underline2[inputright], 95, letterColor);
 }
 
 void changeNumberUp(int i){
@@ -151,6 +193,7 @@ void changeNumberUp(int i){
   } else {
     input[i] = 0;
   }
+  //M5.Lcd.fillScreen(backgroundColor);
 }
 void changeNumberDown(int i){
   if (input[i] > 0) {
@@ -158,6 +201,7 @@ void changeNumberDown(int i){
   } else {
     input[i] = 25;
   }
+  //M5.Lcd.fillScreen(backgroundColor);
 }
 
 void checkCode(){
@@ -166,16 +210,19 @@ void checkCode(){
   int hundred = input[0] * 100;
   int playercode = one + ten + hundred;
   
+  /*
   M5.Lcd.setTextSize(1);
   M5.Lcd.setCursor(200, 0);
-  M5.Lcd.print(playercode);
+  M5.Lcd.print(playercode);*/
 
   if (playercode == code){
+    start = false;
     for (int i = 0; i < NUM_LEDS; i++) {
       leds[i] = CRGB::White;
+      FastLED.show();  // must be executed for neopixel becoming effective
+      delay(50);
     }
-    FastLED.show();  // must be executed for neopixel becoming effective
-    M5.Lcd.fillScreen(GREEN);
+    M5.Lcd.fillScreen(winColor);
   }
 
   M5.Lcd.setTextSize(5);
@@ -189,7 +236,11 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     Serial.printf("topic: %s \n", topic);
     if (strcmp((char *) payload, "start") == 0) {
       start = true;
+      for (int i = 0; i < sizeof(input); i++){
+        input[i] = i;
+      }
       Serial.println("Game starts now");
+      display();
     }
     else if (strcmp((char *) payload, "stop") == 0) {
       start = false;
