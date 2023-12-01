@@ -117,17 +117,17 @@ After the program in the setup() function is executed, the program in the loop()
 The loop() function is an endless loop, in which the program will continue to run repeatedly */
 void loop() {
   M5.update();
+  pubSubClient.loop();
+
+  if (!pubSubClient.connected()) {
+    Serial.println("Connection lost to MQTT Broker!");
+    reconnect_mqtt();
+  } 
 
   if (start == true){
     game_loop();
   }
   //game_loop();
-
-  if (!pubSubClient.connected()) {
-    Serial.println("Connection lost to MQTT Broker!");
-    reconnect_mqtt();
-  }
-  pubSubClient.loop();
 
   delay(250);
 }
@@ -218,23 +218,39 @@ void checkCode(){
   if (playercode == code){
     start = false;
     for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::White;
+      leds[i] = CRGB::Green;
+      FastLED.show();  // must be executed for neopixel becoming effective
+      delay(50);
+    }
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Black;
       FastLED.show();  // must be executed for neopixel becoming effective
       delay(50);
     }
     M5.Lcd.fillScreen(winColor);
+    pubSubClient.publish("DDU4/FAMS/bomb", "goede2");
   }
 
   M5.Lcd.setTextSize(5);
 }
 
+String byteArrayToString(byte byteArray[], int size) {
+  String result = "";
+  for (int i = 0; i <= size; i++) {
+    result += char(byteArray[i]);
+  }
+  return result;
+}
+
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     Serial.printf("Message arrived [%s]:\n", topic);
+    String str = byteArrayToString(payload, sizeof(payload));
     for (int i = 0; i < length; i++) {
         Serial.print((char)payload[i]);
     }
     Serial.printf("topic: %s \n", topic);
-    if (strcmp((char *) payload, "start") == 0) {
+    Serial.println(str);
+    if (str == "start") {
       start = true;
       for (int i = 0; i < sizeof(input); i++){
         input[i] = i;
@@ -242,7 +258,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
       Serial.println("Game starts now");
       display();
     }
-    else if (strcmp((char *) payload, "stop") == 0) {
+    else if (str == "stopt") {
       start = false;
       Serial.println("Game stops now");
       M5.Lcd.fillScreen(BLACK);
